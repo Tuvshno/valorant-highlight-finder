@@ -8,16 +8,19 @@ import time
 from fractions import Fraction
 from tqdm import tqdm
 
-VIDEO_PATH = "vod 2.mp4"
+VIDEO_PATH = "performance_test.mp4"
 HW_ACCEL = "cuda"
-OUTPUT_FOLDER = "frames_out"
+OUTPUT_FOLDER = "frames_out2"
 NUM_WORKERS = 4
+INTERVAL_SECONDS = 4
 
 def extract_fps_ffmpeg(video_path):
     """
     Use ffprobe to get the r_frame_rate (e.g. '30000/1001'),
     convert it to a float, and round to int.
     """
+    
+    # frame-based extraction and no resolution change -> 20 minutes for 3 hours
     ffmpeg_command = [
         "ffprobe",
         "-v", "0",
@@ -26,6 +29,7 @@ def extract_fps_ffmpeg(video_path):
         "-of", "csv=p=0",
         video_path
     ]
+
     result = subprocess.run(ffmpeg_command, capture_output=True, text=True)
     fraction_str = result.stdout.strip()  # e.g. "30000/1001"
     fps_float = float(Fraction(fraction_str))  # e.g. ~29.97
@@ -56,6 +60,33 @@ def extract_frames_ffmpeg(video_path, out_folder, skip, hw_accel=None):
     print("Running FFmpeg command:\n", " ".join(ffmpeg_command))
     subprocess.run(ffmpeg_command, check=True)
     print("FFmpeg extraction complete.")
+
+def extract_frames_time_based(video_path, out_folder, interval_s=4, hw_accel=None):
+    """
+    Extract 1 frame every `interval_s` seconds using time-based FPS filter,
+    scale to 720p height, and output to JPEG.
+    """
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder, exist_ok=True)
+        
+    filter_str = f"fps=1/{interval_s},scale=-2:720"
+
+    ffmpeg_cmd = ["ffmpeg"]
+    if hw_accel:
+        ffmpeg_cmd += ["-hwaccel", hw_accel]  
+    
+    ffmpeg_cmd += [
+        "-i", video_path,
+        "-vf", filter_str,
+        "-vsync", "0",
+        os.path.join(out_folder, "frame_%06d.jpg")
+    ]
+    
+    print("Running FFmpeg command:\n", " ".join(ffmpeg_cmd))
+    subprocess.run(ffmpeg_cmd, check=True)
+    print("Time-based extraction complete.")
+
+
 
 def ocr_image(image_path):
     img = cv2.imread(image_path)
@@ -104,10 +135,7 @@ def parse_detections(ocr_results):
                 print(f"Victory/Defeat at {img_path} but no map known yet.")
     return games_data
 
-
-def main():
-    start = time.time()
-
+def run_frame_based_approach():
     # Determine FPS and define skip
     fps = extract_fps_ffmpeg(VIDEO_PATH)
     skip_frames = int(fps * 4)   # for 1 frame every ~4 seconds
@@ -115,9 +143,55 @@ def main():
 
     # Extract frames with FFmpeg
     extract_frames_ffmpeg(VIDEO_PATH, OUTPUT_FOLDER, skip_frames, hw_accel=HW_ACCEL)
+    frame_files =  sorted(glob.glob(os.path.join(OUTPUT_FOLDER, "*.png")))
+    if not frame_files:
+        print(f"No frames found in {OUTPUT_FOLDER}. Check FFmpeg step.")
+        return
+    return frame_files
+    
+def run_time_based_approach():
+    extract_frames_time_based(
+        video_path=VIDEO_PATH,
+        out_folder=OUTPUT_FOLDER,
+        interval_s=INTERVAL_SECONDS,
+        hw_accel=HW_ACCEL
+    )
 
-    # Gather frames
-    frame_files = sorted(glob.glob(os.path.join(OUTPUT_FOLDER, "*.png")))
+    # 2) Gather extracted .jpg frames
+    frame_files = sorted(glob.glob(os.path.join(OUTPUT_FOLDER, "*.jpg")))
+    if not frame_files:
+        print(f"No frames found in {OUTPUT_FOLDER}. Check FFmpeg step.")
+        return
+    return frame_files
+
+def performance_test():
+    VIDEO_PATH = "performance_test.mp4"
+    OUTPUT_FOLDER = "performance_spam"
+    
+    print("Comparing frame-based vs time-based extraction on:", VIDEO_PATH)
+
+    # 1) Frame-based
+    start_fb = time.time()
+    fb_frames = run_frame_based_approach()
+    end_fb = time.time()
+    print(f"Frame-based extracted {len(fb_frames)} frames in {end_fb - start_fb:.2f} seconds.\n")
+
+    # 2) Time-based
+    start_tb = time.time()
+    tb_frames = run_time_based_approach()
+    end_tb = time.time()
+    print(f"Time-based extracted {len(tb_frames)} frames in {end_tb - start_tb:.2f} seconds.\n")
+
+
+def main():
+    performance_test()
+    return
+    
+    start = time.time()
+
+    # frame_files = run_frame_based_approach()
+    frame_files = run_time_based_approach()
+    
     if not frame_files:
         print(f"No frames found in {OUTPUT_FOLDER}. Check FFmpeg step.")
         return
