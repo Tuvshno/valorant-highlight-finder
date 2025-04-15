@@ -1,119 +1,147 @@
+import os
+import subprocess
+import glob
 import cv2
 import pytesseract
 import multiprocessing
-from tqdm import tqdm
 import time
+from fractions import Fraction
+from tqdm import tqdm
 
-def process_frame_for_ocr(args):
+VIDEO_PATH = "vod 2.mp4"
+HW_ACCEL = "cuda"
+OUTPUT_FOLDER = "frames_out"
+NUM_WORKERS = 4
+
+def extract_fps_ffmpeg(video_path):
     """
-    Worker function that receives (frame_index, cropped_image) and returns
-    recognized text plus the frame index.
+    Use ffprobe to get the r_frame_rate (e.g. '30000/1001'),
+    convert it to a float, and round to int.
     """
-    frame_index, cropped_bgr = args
-    gray = cv2.cvtColor(cropped_bgr, cv2.COLOR_BGR2GRAY)
+    ffmpeg_command = [
+        "ffprobe",
+        "-v", "0",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=r_frame_rate",
+        "-of", "csv=p=0",
+        video_path
+    ]
+    result = subprocess.run(ffmpeg_command, capture_output=True, text=True)
+    fraction_str = result.stdout.strip()  # e.g. "30000/1001"
+    fps_float = float(Fraction(fraction_str))  # e.g. ~29.97
+    fps_int = round(fps_float)
+    return fps_int
+
+def extract_frames_ffmpeg(video_path, out_folder, skip, hw_accel=None):
+    """
+    Calls FFmpeg to extract 1 frame every 'skip' frames 
+    using hardware acceleration if specified.
+    
+    """
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder, exist_ok=True)
+
+    # Build FFmpeg command
+    ffmpeg_command = ["ffmpeg"]
+    if hw_accel:
+        ffmpeg_command += ["-hwaccel", hw_accel]
+
+    ffmpeg_command += [
+        "-i", video_path,
+        "-vf", f"select='not(mod(n,{skip}))',setpts=N/FRAME_RATE/TB",
+        "-vsync", "0",
+        os.path.join(out_folder, "frame_%06d.png")
+    ]
+
+    print("Running FFmpeg command:\n", " ".join(ffmpeg_command))
+    subprocess.run(ffmpeg_command, check=True)
+    print("FFmpeg extraction complete.")
+
+def ocr_image(image_path):
+    img = cv2.imread(image_path)
+    if img is None:
+        return (image_path, "")
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-    
-    recognized_text = pytesseract.image_to_string(thresh, config="--psm 7 --oem 3").upper()
-    return (frame_index, recognized_text)
 
-def main():
-    video_path = 'vod 2.mp4'
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print("Error: Could not open video.")
-        return
+    text = pytesseract.image_to_string(thresh, config="--psm 7 --oem 3").upper()
+    return (image_path, text)
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    skip_rate = max(1, int(fps * 4)) if fps else 1  # 1 frame every 4s if fps=30
-    
-    # Figure out cropping region (±150 px from center)
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    y_center = height // 2
-    top = max(0, y_center - 150)
-    bottom = min(height, y_center + 150)
-    
-    # We'll collect (frame_index, cropped_roi) pairs here
-    frames_to_ocr = []
-    
-    frame_index = 0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+KNOWN_MAPS = [
+    "ABYSS", "ASCENT", "BIND", "BREEZE", "FRACTURE",
+    "HAVEN", "ICEBOX", "PEARL", "SPLIT", "SUNSET"
+]
 
-    start = time.time()
-    for _ in tqdm(range(total_frames), desc="Reading frames"):
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        if frame_index % skip_rate == 0:
-            # Crop ROI
-            roi = frame[top:bottom, 0:width]
-            # You can do the 'difference check' here if you want, to skip repeated frames
-            # We'll keep it simple for now
-            frames_to_ocr.append((frame_index, roi))
-        
-        frame_index += 1
-
-    cap.release()
-    
-    # Now we do OCR in parallel
-    print(f"Collected {len(frames_to_ocr)} frames to process.")
-    
-    # Create a multiprocessing pool
-    num_workers = 4  # adjust based on your CPU
-    pool = multiprocessing.Pool(num_workers)
-    
-    # Map all frames to OCR in parallel
-    results = list(tqdm(pool.imap(process_frame_for_ocr, frames_to_ocr), total=len(frames_to_ocr), desc="OCR"))
-    
-    pool.close()
-    pool.join()
-    
-    # 'results' is a list of (frame_index, recognized_text) in the order they were processed
-    # We can sort by frame_index if needed
-    results.sort(key=lambda x: x[0])
-    
-    # Now parse recognized_text for map detection, victory/defeat, etc.
-    # The parsing logic can be the same as before, but done in a single pass over 'results'.
+def parse_detections(ocr_results):
     last_map = None
-    last_map_frame = None
+    last_map_path = None
     games_data = []
-    
-    known_maps = ["ABYSS", "ASCENT", "BIND", "BREEZE", "FRACTURE",
-                  "HAVEN", "ICEBOX", "PEARL", "SPLIT", "SUNSET"]
-    
-    for (fidx, text) in results:
-        # Map check
-        for m in known_maps:
+
+    for (img_path, text) in ocr_results:
+        # Check if there's a known map
+        for m in KNOWN_MAPS:
             if m in text:
                 last_map = m
-                last_map_frame = fidx
-                print(f"[Frame {fidx}] Detected map: {m}")
+                last_map_path = img_path
+                print(f"[MAP] {m} => {img_path}")
                 break
-        
-        # Victory/Defeat check
+
+        # Check for victory/defeat
         if "VICTORY" in text or "DEFEAT" in text:
-            if last_map is not None:
+            if last_map:
                 result = "VICTORY" if "VICTORY" in text else "DEFEAT"
-                # record game
-                game_entry = {
+                games_data.append({
                     "map": last_map,
-                    "start_frame": last_map_frame,
-                    "end_frame": fidx,
+                    "start_frame_image": last_map_path,
+                    "end_frame_image": img_path,
                     "result": result
-                }
-                games_data.append(game_entry)
-                print(f"[Frame {fidx}] {result} detected for map {last_map}!")
-                # reset
+                })
+                print(f"==> {result} on map {last_map}, from {last_map_path} to {img_path}")
                 last_map = None
-                last_map_frame = None
-    
-    print("\n=== Detected Games ===")
+                last_map_path = None
+            else:
+                print(f"Victory/Defeat at {img_path} but no map known yet.")
+    return games_data
+
+
+def main():
+    start = time.time()
+
+    # Determine FPS and define skip
+    fps = extract_fps_ffmpeg(VIDEO_PATH)
+    skip_frames = int(fps * 4)   # for 1 frame every ~4 seconds
+    print(f"Video FPS={fps}, skip={skip_frames}")
+
+    # Extract frames with FFmpeg
+    extract_frames_ffmpeg(VIDEO_PATH, OUTPUT_FOLDER, skip_frames, hw_accel=HW_ACCEL)
+
+    # Gather frames
+    frame_files = sorted(glob.glob(os.path.join(OUTPUT_FOLDER, "*.png")))
+    if not frame_files:
+        print(f"No frames found in {OUTPUT_FOLDER}. Check FFmpeg step.")
+        return
+
+    print(f"Found {len(frame_files)} frame(s) to OCR...")
+
+    # Parallel OCR
+    with multiprocessing.Pool(processes=NUM_WORKERS) as pool:
+        results = list(tqdm(pool.imap(ocr_image, frame_files),
+                            total=len(frame_files),
+                            desc="OCR"))
+
+    # Sort results if needed
+    results.sort(key=lambda x: x[0])
+
+    # Parse for map & victory/defeat
+    games_data = parse_detections(results)
+
+    print("\n=== Final Detected Games ===")
     for i, g in enumerate(games_data, start=1):
-        print(f"Game {i}: {g}")
+        print(f"Game {i}: Map={g['map']}, Start={g['start_frame_image']}, End={g['end_frame_image']}, Result={g['result']}")
 
     end = time.time()
-    print(end - start)
-    
+    print("Elapsed time:", end - start)
+
 if __name__ == "__main__":
     main()
