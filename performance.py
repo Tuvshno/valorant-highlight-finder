@@ -1,2 +1,0 @@
-import ocr_batch
-

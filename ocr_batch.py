@@ -173,25 +173,18 @@ def performance_test():
     # 1) Frame-based
     start_fb = time.time()
     fb_frames = run_frame_based_approach()
+    run_ocr(fb_frames)
     end_fb = time.time()
     print(f"Frame-based extracted {len(fb_frames)} frames in {end_fb - start_fb:.2f} seconds.\n")
 
     # 2) Time-based
     start_tb = time.time()
     tb_frames = run_time_based_approach()
+    run_ocr(tb_frames)
     end_tb = time.time()
     print(f"Time-based extracted {len(tb_frames)} frames in {end_tb - start_tb:.2f} seconds.\n")
 
-
-def main():
-    performance_test()
-    return
-    
-    start = time.time()
-
-    # frame_files = run_frame_based_approach()
-    frame_files = run_time_based_approach()
-    
+def run_ocr(frame_files):
     if not frame_files:
         print(f"No frames found in {OUTPUT_FOLDER}. Check FFmpeg step.")
         return
@@ -214,8 +207,18 @@ def main():
     for i, g in enumerate(games_data, start=1):
         print(f"Game {i}: Map={g['map']}, Start={g['start_frame_image']}, End={g['end_frame_image']}, Result={g['result']}")
 
-    end = time.time()
-    print("Elapsed time:", end - start)
+    
+
+def main():
+    performance_test()
+    return
+    
+    start = time.time()
+
+    # frame_files = run_frame_based_approach()
+    frame_files = run_time_based_approach()
+    
+    
 
 if __name__ == "__main__":
     main()
