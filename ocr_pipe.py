@@ -9,7 +9,7 @@ import multiprocessing as mp
 from fractions import Fraction
 from tqdm import tqdm
 
-VIDEO_PATH        = "two_games_check.mp4"   
+VIDEO_PATH        = "full_vod_check.mp4"   
 HW_ACCEL          = "cuda"                   
 INTERVAL_SECONDS  = 4                        
 TARGET_HEIGHT     = 720     
@@ -50,7 +50,7 @@ def ocr_worker(frame_queue, result_queue):
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         _, thr = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         
-        cv2.imwrite(f"debug_frame{frame_idx:03d}.png", thr)
+        # cv2.imwrite(f"debug_frame{frame_idx:03d}.png", thr)
         
         text = pytesseract.image_to_string(thr, config="--psm 7 --oem 3").upper()
         
