@@ -9,7 +9,6 @@ def ocr_worker(task_queue, result_queue):
     while True:
         item = task_queue.get()
         if item is None:
-            # None is a sentinel to indicate 'no more tasks'
             break
         
         frame_index, roi_bgr = item
@@ -17,7 +16,6 @@ def ocr_worker(task_queue, result_queue):
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         recognized_text = pytesseract.image_to_string(thresh, config="--psm 7 --oem 3").upper()
         
-        # Put result in result_queue
         result_queue.put((frame_index, recognized_text))
 
 def main():
@@ -40,7 +38,7 @@ def main():
     start = time.time()
     
     # Create queues
-    task_queue = multiprocessing.Queue(maxsize=50)  # limit so we don't fill memory
+    task_queue = multiprocessing.Queue(maxsize=50)  
     result_queue = multiprocessing.Queue()
         
     # Start worker processes
@@ -51,7 +49,6 @@ def main():
         p.start()
         processes.append(p)
     
-    # We'll read frames in main process, and push tasks to the queue
     frame_index = 0
     for _ in tqdm(range(total_frames), desc="Reading frames"):
         ret, frame = cap.read()
@@ -59,22 +56,16 @@ def main():
             break
         if frame_index % skip_rate == 0:
             roi = frame[top:bottom, 0:width]
-            # Put (frame_index, roi) into task_queue
             task_queue.put((frame_index, roi))
         frame_index += 1
 
     cap.release()
     
-    # Send sentinel (None) to each worker so they stop
     for _ in processes:
         task_queue.put(None)
-
-    # Meanwhile, we can read from result_queue until we've received them all
-    # We know how many items we submitted to the queue
     num_tasks = frame_index // skip_rate + 1  # or a more accurate count
     results_collected = 0
     
-    # Store all results here
     results = []
     
     while results_collected < num_tasks:
@@ -83,17 +74,13 @@ def main():
             results.append((fidx, text))
             results_collected += 1
         except:
-            # maybe a timeout - no big deal, we'll loop
             pass
     
-    # Now join the workers
     for p in processes:
         p.join()
     
-    # Sort results by frame index
     results.sort(key=lambda x: x[0])
     
-    # Do your final parse for map detection, victory/defeat, etc.
     last_map = None
     last_map_frame = None
     known_maps = ["ABYSS", "ASCENT", "BIND", "BREEZE", "FRACTURE",

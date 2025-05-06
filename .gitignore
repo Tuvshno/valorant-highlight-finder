@@ -1,6 +1,15 @@
 *.png
 *.webp
 *.mp4
+*.wav
+*.mp3
+debug
 highlighr-env
 frames_out
 frames_out2
+assets
+runs
+*.pt
+*.onnx
+*.torchscript
+

@@ -210,8 +210,8 @@ def run_ocr(frame_files):
     
 
 def main():
-    performance_test()
-    return
+    # performance_test()
+    # return
     
     start = time.time()
 

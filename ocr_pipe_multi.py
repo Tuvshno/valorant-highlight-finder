@@ -58,7 +58,6 @@ def ocr_worker(frame_queue, result_queue):
         ).strip().upper()
         out["map"] = txt
 
-        # --- TIMER (digits + colon) ---
         gray = cv2.cvtColor(crops["timer"], cv2.COLOR_BGR2GRAY)
         _, thr = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         txt = pytesseract.image_to_string(
@@ -67,7 +66,6 @@ def ocr_worker(frame_queue, result_queue):
         ).strip()
         out["timer"] = txt
 
-        # --- SCORE LEFT (digits + slash) ---
         gray = cv2.cvtColor(crops["score_L"], cv2.COLOR_BGR2GRAY)
         _, thr = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         txt = pytesseract.image_to_string(
@@ -76,7 +74,6 @@ def ocr_worker(frame_queue, result_queue):
         ).strip()
         out["score_L"] = txt
 
-        # --- SCORE RIGHT (digits + slash) ---
         gray = cv2.cvtColor(crops["score_R"], cv2.COLOR_BGR2GRAY)
         _, thr = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         txt = pytesseract.image_to_string(
@@ -114,7 +111,6 @@ def stream_frames(video_path, interval_s, width, height, hw_accel, rois, frame_q
                 break
             frame = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 3))
 
-            # Crop all ROIs at once
             crops = {}
             for name,(y1,y2,x1,x2) in rois.items():
                 crops[name] = frame[y1:y2, x1:x2]
@@ -126,7 +122,6 @@ def stream_frames(video_path, interval_s, width, height, hw_accel, rois, frame_q
         pbar.close()
         proc.stdout.close()
         proc.wait()
-        # signal workers to exit
         for _ in range(NUM_OCR_WORKERS):
             frame_queue.put(None)
 
@@ -159,7 +154,6 @@ def parse_results(result_queue, total_frames):
 def main():
     width, height = get_video_resolution(VIDEO_PATH)
 
-    # Build dynamic ROIs: map / timer / score_L / score_R
     y_center = height // 2
     ROIS = {
         "map":     (y_center-ROI_HALF_HEIGHT, y_center+ROI_HALF_HEIGHT, 0, width),
