@@ -3,6 +3,7 @@
 *.mp4
 *.wav
 *.mp3
+*.webm
 debug
 highlighr-env
 frames_out
@@ -12,4 +13,4 @@ runs
 *.pt
 *.onnx
 *.torchscript
-
+*.json
