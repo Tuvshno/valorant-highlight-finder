@@ -5,11 +5,12 @@ import onnxruntime as ort
 import numpy as np
 import logging
 import cv2
+import os
 
 from onnx import helper
 from google.protobuf.json_format import MessageToDict
 
-IN_VIDEO_PATH = "./assets/highlight_trimmed.webm"
+IN_VIDEO_PATH = "./assets/highlight.webm"
 OUT_VIDEO_PATH = "output.webm"
 MODEL_PATH = "./best.onnx"
 
@@ -47,8 +48,6 @@ def load_onnx():
                 shape.append(d.dim_param)   
         print(f"{_output.name}: {shape}")
         
-    return onnx_model
-
 def get_video_size(filename):
     logger.info('Getting video size for {!r}'.format(filename))
     probe = ffmpeg.probe(filename)
@@ -62,6 +61,7 @@ def start_ffmpeg_process1(in_filename):
     args = (
         ffmpeg
         .input(in_filename)
+        .filter('fps', fps=1/2)
         .output('pipe:', format='rawvideo', pix_fmt='rgb24')
         .compile()
     )
@@ -124,7 +124,7 @@ def process_frame(full_res, model_input, session, conf_threshold=0.9):
         cv2.rectangle(full_res, pt1, pt2, (0, 255, 0), 2)
         label = f"{conf:.2f}"
         cv2.putText(full_res, label, (pt1[0], pt1[1] - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
 
     return full_res
     
@@ -140,9 +140,9 @@ def run(in_filename, out_filename, process_frame):
     
     width, height = get_video_size(in_filename)
     process1 = start_ffmpeg_process1(in_filename)
-    process2 = start_ffmpeg_process2(out_filename, width, height)
+    # process2 = start_ffmpeg_process2(out_filename, width, height)
     
-    model = load_onnx()
+    load_onnx()
     options = ort.SessionOptions()
     options.enable_profiling=True
     session = ort.InferenceSession(
@@ -150,7 +150,9 @@ def run(in_filename, out_filename, process_frame):
             sess_options=options,
             providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
     )
-    
+
+    os.makedirs('./debug', exist_ok=True)    
+    frame_idx = 0
     while True:
         full_res, model_input = read_frame(process1, width, height)
         if full_res is None:
@@ -159,14 +161,18 @@ def run(in_filename, out_filename, process_frame):
 
         logger.debug('Processing frame')
         annotated = process_frame(full_res, model_input, session)
-        write_frame(process2, annotated)
+        
+        # write_frame(process2, annotated)
+        annotated = cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(f'./debug/debug_frame{frame_idx:03d}.png', annotated)
+        frame_idx += 1
 
     logger.info('Waiting for ffmpeg process1')
     process1.wait()
 
-    logger.info('Waiting for ffmpeg process2')
-    process2.stdin.close()
-    process2.wait()
+    # logger.info('Waiting for ffmpeg process2')
+    # process2.stdin.close()
+    # process2.wait()
 
     logger.info('Done')
 
