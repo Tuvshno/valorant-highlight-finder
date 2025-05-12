@@ -10,7 +10,7 @@ frames_out
 frames_out2
 assets
 runs
-*.pt
-*.onnx
 *.torchscript
 *.json
+yolo11m.pt
+yolo11s.pt

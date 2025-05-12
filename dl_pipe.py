@@ -250,9 +250,7 @@ def load_session():
 
     return session
 
-if __name__ == "__main__":
-    session = load_session()
-
+def run_performance_comparision(session):
     start_single = time.time()
     run(IN_VIDEO_PATH, session)
     end_single = time.time()
@@ -263,3 +261,10 @@ if __name__ == "__main__":
     
     print(f'Single Inference: {end_single-start_single:03f}')
     print(f'Batch Inference: {end_batch-start_batch:03f}')
+
+if __name__ == "__main__":
+    session = load_session()
+    # run_performance_comparision(session)
+
+    run(IN_VIDEO_PATH, session)
+    
