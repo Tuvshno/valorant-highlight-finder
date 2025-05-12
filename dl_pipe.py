@@ -114,7 +114,7 @@ def read_frame_batch(process1, width, height, input_size=(640, 640)):
 
     return full_res, model_input
 
-def process_frame(full_res, model_input, session, conf_threshold=0.9):
+def process_frame(full_res, model_input, session, conf_threshold=0.9, nms_thresh=0.4):
     input_name = session.get_inputs()[0].name
     raw_output = session.run(None, {input_name: model_input})[0]
     
@@ -123,24 +123,31 @@ def process_frame(full_res, model_input, session, conf_threshold=0.9):
     h_full, w_full = full_res.shape[:2]
     scale_x, scale_y = w_full / 640.0, h_full / 640.0
 
+    boxes = []
+    confs = []
     for x_c, y_c, bw, bh, conf in boxes5:
         if conf < conf_threshold:
             continue
 
-        x1 = x_c - bw / 2
-        y1 = y_c - bh / 2
-        x2 = x_c + bw / 2
-        y2 = y_c + bh / 2
+        x1 = ( x_c - bw / 2 ) * scale_x
+        y1 = ( y_c - bh / 2 ) * scale_y
+        x2 = ( x_c + bw / 2 ) * scale_x
+        y2 = ( y_c + bh / 2 ) * scale_y
+        
+        boxes.append([x1, y1, x2-x1, y2-y1])
+        confs.append(float(conf))
+        
+    idxs = cv2.dnn.NMSBoxes(boxes, confs, conf_threshold, nms_thresh)
+    detections = 0
+    for i in idxs:
+        i = i[0] if isinstance(i, (tuple,list)) else i
+        x, y, w_box, h_box = boxes[i]
+        x, y, w_box, h_box = int(x), int(y), int(w_box), int(h_box)
+        cv2.rectangle(full_res, (x,y), (x+w_box,y+h_box), (0,255,0), 2)
+        cv2.putText(full_res, f"{confs[i]:.2f}", (x, y-8), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 1)
+        detections += 1
 
-        pt1 = (int(x1 * scale_x), int(y1 * scale_y))
-        pt2 = (int(x2 * scale_x), int(y2 * scale_y))
-
-        cv2.rectangle(full_res, pt1, pt2, (0, 255, 0), 2)
-        label = f"{conf:.2f}"
-        cv2.putText(full_res, label, (pt1[0], pt1[1] - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
-
-    return full_res
+    return full_res, detections
     
 def process_frame_batch(batch_frames, batch_inputs, session, conf_threshold=0.9):
     input_name = session.get_inputs()[0].name
@@ -178,6 +185,12 @@ def write_frame(annotated, folder, frame_idx):
     annotated = cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR)
     cv2.imwrite(f'./debug/{folder}/debug_frame{frame_idx:03d}.png', annotated)
 
+def print_detections(detections_list, fps=0.5):
+    for frame_idx, kill_count in detections_list:
+        seconds = frame_idx / fps
+        timestamp = time.strftime('%H:%M:%S', time.gmtime(seconds))
+        print(f'Detection at {timestamp} : frame_dx {frame_idx} : {kill_count} kills ')
+
 def run(in_filename, session):
     width, height = get_video_size(in_filename)
     process1 = start_ffmpeg_process1(in_filename)
@@ -185,6 +198,7 @@ def run(in_filename, session):
     os.makedirs('./debug', exist_ok=True)    
     os.makedirs('./debug/single', exist_ok=True)
     frame_idx = 0
+    detections_list = []
     while True:
         full_res, model_input = read_frame(process1, width, height)
         if full_res is None:
@@ -192,11 +206,14 @@ def run(in_filename, session):
             break
 
         logger.debug('Processing frame')
-        annotated = process_frame(full_res, model_input, session)
+        annotated, detections = process_frame(full_res, model_input, session)
 
         write_frame(annotated, "single", frame_idx)
+        if detections > 0:
+            detections_list.append((frame_idx, detections))
         frame_idx += 1
 
+    print_detections(detections_list)
     logger.info('Waiting for ffmpeg process1')
     process1.wait()
     logger.info('Done')
