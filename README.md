@@ -1,6 +1,6 @@
 # Valorant Kill Finder
 
-Medium Deep Learning Model and Pipeline that can identify your kills in any VOD using FFMPEG, YOLOV11, ONNX, and OpenCV.
+Medium Deep Learning Model and Pipeline that can identify your kills in any VOD.
 
 ![Highlightr Demo](docs/demo_resized.gif)  
 Video from [Dacoit](https://www.youtube.com/@dacoiit). Adjusted to 1 frame/second.
