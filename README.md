@@ -102,20 +102,20 @@ Over time I explored multiple approaches before reaching the final pipeline. Her
      - **Multi-stage** (`ocr_pipe_multi.py`) parallelized reads + inference  
    - **Limitation:** OCR struggled on low contrast or anti-aliasing. Not very reliable.
 
-At this point, I wasn't making any good progress using OCR to identify maps. So I decided to try to switch to a different UI to focus on. I still wasn't focused on kills specifically, but on other features that could help identify the kills.
+> At this point, I wasn't making any good progress using OCR to identify maps. So I decided to try to switch to a different UI to focus on. I still wasn't focused on kills specifically, but on other features that could help identify the kills.
 
 3. **`round_detection.py`**  
    - Added a CV-based “round change” detector using frame differencing + contours.  
    - Helped segment gameplay into discrete rounds for focused analysis.
    - **Limitation:** Not very reliable.
 
-After failing to make a good round finder with OCR, I tried to use audio matching to identify the kill sound.
+> After failing to make a good round finder with OCR, I tried to use audio matching to identify the kill sound.
 
 4. **`audio_matchfinder.py`**  
    - Experimented with audio cue detection (gunshots, death sounds) via waveform matching.  
    - **Limitation:** Not very reliable.
 
-Finally, I decided that I was focusing on the wrong things. I strictly focused on the UI of the kills and switched to a more robust method: deep learning.
+> Finally, I decided that I was focusing on the wrong things. I strictly focused on the UI of the kills and switched to a more robust method: deep learning.
 
 5. **`dl_torch.py`**  
    - Moved to deep learning: trained a YOLOv11m model on custom annotated kill-counter images.
