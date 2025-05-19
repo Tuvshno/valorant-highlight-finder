@@ -273,7 +273,7 @@ def run_performance_comparision(session):
     end_single = time.time()
     
     start_batch = time.time()
-    run_batch(IN_VIDEO_PATH, session, batch_size=2)
+    run_batch(IN_VIDEO_PATH, session, batch_size=4)
     end_batch = time.time()
     
     print(f'Single Inference: {end_single-start_single:03f}')

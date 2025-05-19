@@ -1,6 +1,6 @@
 # Valorant Kill Finder
 
-Medium Deep Learning Model and Pipeline that can identify your kills in any VOD.
+Medium Deep Learning Model and Pipeline that can identify your kills in any VOD using FFMPEG, YOLOV11, ONNX, and OpenCV.
 
 ![Highlightr Demo](docs/demo_resized.gif)  
 Video from [Dacoit](https://www.youtube.com/@dacoiit). Adjusted to 1 frame/second.
@@ -84,3 +84,51 @@ Benchmarked the full pipeline on a 5 min 30 s (330 s) gameplay highlight using:
 
 - **Single-frame & Batch Inference**  
 - **CUDA Support**  
+
+## Development Process & Iterations
+
+Over time I explored multiple approaches before reaching the final pipeline. Here’s the evolution:
+
+1. **`process/template_matching.py`**  
+   - Simple OpenCV template matching to locate the map that players would play on static frames.  
+   - **Limitation:** HUD variations and very slow.
+
+2. **`ocr_kills.py` → `ocr_batch.py` → `ocr_pipe.py` → `ocr_stream.py` → `ocr_pipe_multi.py`**  
+   - Switched to Tesseract OCR to read the map/round/kill HUD.  
+   - Built increasingly robust workflows:  
+     - **Pipe mode** (`ocr_pipe.py`) piping raw frames via FFmpeg to OCR
+     - **Batch mode** (`ocr_batch.py`) piping raw frames via FFmpeg in batches to OCR 
+     - **Real-time** (`ocr_stream.py`) piping raw frames via FFmpeg to OCR (small adjustments)
+     - **Multi-stage** (`ocr_pipe_multi.py`) parallelized reads + inference  
+   - **Limitation:** OCR struggled on low contrast or anti-aliasing. Not very reliable.
+
+At this point, I wasn't making any good progress using OCR to identify maps. So I decided to try to switch to a different UI to focus on. I still wasn't focused on kills specifically, but on other features that could help identify the kills.
+
+3. **`round_detection.py`**  
+   - Added a CV-based “round change” detector using frame differencing + contours.  
+   - Helped segment gameplay into discrete rounds for focused analysis.
+   - **Limitation:** Not very reliable.
+
+After failing to make a good round finder with OCR, I tried to use audio matching to identify the kill sound.
+
+4. **`audio_matchfinder.py`**  
+   - Experimented with audio cue detection (gunshots, death sounds) via waveform matching.  
+   - **Limitation:** Not very reliable.
+
+Finally, I decided that I was focusing on the wrong things. I strictly focused on the UI of the kills and switched to a more robust method: deep learning.
+
+5. **`dl_torch.py`**  
+   - Moved to deep learning: trained a YOLOv11m model on custom annotated kill-counter images.
+   - **3-process architecture**: Reader ⟶ Inferencer ⟶ Writer using `multiprocessing` + `SharedMemory`  
+   - **Inference**: PyTorch model, manual batch collection & stacking  
+   - **Pre/post-processing**: Custom `letterbox` padding, no NMS  
+   - **Output**: Annotated PNG frames only  
+   - **Limitation:** Convoluted pipeline and was difficult to work with and debug.
+
+
+6. **Final Pipeline** (`dl_pipe.py` / ONNX version)  
+   - **Single-process loop**: FFmpeg pipe → preprocess → ONNX Runtime → annotate → write  
+   - **Decoding**: `ffmpeg-python` rawvideo stream   
+   - **Inference**: ONNX Runtime (CUDA+CPU) with optional NumPy batching  
+   - **Pre/post-processing**: OpenCV resize + normalize + NMS  
+   - **Output**: Per-frame PNGs
