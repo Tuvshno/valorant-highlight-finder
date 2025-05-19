@@ -63,7 +63,7 @@ def start_ffmpeg_process1(in_filename):
     args = (
         ffmpeg
         .input(in_filename)
-        .filter('fps', fps=1/2)
+        .filter('fps', fps=1/1)
         .output('pipe:', format='rawvideo', pix_fmt='rgb24')
         .compile()
     )
@@ -114,7 +114,7 @@ def read_frame_batch(process1, width, height, input_size=(640, 640)):
 
     return full_res, model_input
 
-def process_frame(full_res, model_input, session, conf_threshold=0.9, nms_thresh=0.4):
+def process_frame(full_res, model_input, session, conf_threshold=0.85, nms_thresh=0.4):
     input_name = session.get_inputs()[0].name
     raw_output = session.run(None, {input_name: model_input})[0]
     
@@ -149,7 +149,7 @@ def process_frame(full_res, model_input, session, conf_threshold=0.9, nms_thresh
 
     return full_res, detections
     
-def process_frame_batch(batch_frames, batch_inputs, session, conf_threshold=0.9):
+def process_frame_batch(batch_frames, batch_inputs, session, conf_threshold=0.85):
     input_name = session.get_inputs()[0].name
     batch_inputs_stacked = np.stack(batch_inputs, axis=0)
     raw_output = session.run(None, {input_name: batch_inputs_stacked})[0]
