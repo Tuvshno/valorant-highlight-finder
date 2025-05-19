@@ -1,4 +1,4 @@
-# Highlightr
+# Valorant Kill Finder
 
 Medium Deep Learning Model and Pipeline that can identify your kills in any VOD.
 
