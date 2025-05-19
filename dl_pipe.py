@@ -281,7 +281,7 @@ def run_performance_comparision(session):
 
 if __name__ == "__main__":
     session = load_session()
-    # run_performance_comparision(session)
+    run_performance_comparision(session)
 
-    run(IN_VIDEO_PATH, session)
+    # run(IN_VIDEO_PATH, session)
     

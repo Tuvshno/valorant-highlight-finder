@@ -32,12 +32,28 @@ Video from [Dacoit](https://www.youtube.com/@dacoiit). Adjusted to 1 frame/secon
 - **mAP@0.5**: 99.50 %  
 - **mAP@0.5–0.95**: 91.36 %
 
-Caution: These near-perfect numbers were obtained on a tiny test set. The near-100 % precision and recall usually point to overfitting and insufficient data diversity.
+> **Caution:** These near-perfect numbers were obtained on a tiny test set. The near-100 % precision and recall usually point to overfitting and insufficient data diversity.
 
 I will soon add a more reliable benchmark once I find the time to annotate more data. However, the model still performs with high accuracy despite insufficient test set benchmarks.
 
 ![Training Metrics](docs/result_small.png)  
 Training Metrics
+
+## Inference Performance
+
+Benchmarked the full pipeline on a 5 min 30 s (330 s) gameplay highlight using:
+
+- **Hardware**: NVIDIA GTX 1050 Ti, AMD Ryzen 9 5900X  
+- **Model input**: 640×640 RGB frames  
+- **Sampling rate**: 0.5 fps (one frame every 2 s)
+
+| Mode             | Total Time (s) |
+|------------------|---------------:|
+| Single-frame     | 80.81          |
+| Batch (B=16)     | 80.90          |
+
+> **Note:** Both modes processed the video in ≈80.8 which 4× faster than playback.  
+> Batches on a more powerful card will likely show better speed-ups in batch mode.  
 
 ## Architecture
 
