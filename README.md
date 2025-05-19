@@ -50,7 +50,7 @@ Benchmarked the full pipeline on a 5 min 30 s (330 s) gameplay highlight using:
 | Mode             | Total Time (s) |
 |------------------|---------------:|
 | Single-frame     | 80.81          |
-| Batch (B=16)     | 80.90          |
+| Batch (B=4)      | 76.14          |
 
 > **Note:** Both modes processed the video in ≈80.8 which 4× faster than playback.  
 > Batches on a more powerful card will likely show better speed-ups in batch mode.  
