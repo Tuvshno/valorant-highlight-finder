@@ -128,7 +128,7 @@ Finally, I decided that I was focusing on the wrong things. I strictly focused o
 
 6. **Final Pipeline** (`dl_pipe.py` / ONNX version)  
    - **Single-process loop**: FFmpeg pipe → preprocess → ONNX Runtime → annotate → write  
-   - **Decoding**: `ffmpeg-python` rawvideo stream   
-   - **Inference**: ONNX Runtime (CUDA+CPU) with optional NumPy batching  
+   - **Decoding**: `ffmpeg-python` rawvideo pipe   
+   - **Inference**: ONNX Runtime (CUDA+CPU) 
    - **Pre/post-processing**: OpenCV resize + normalize + NMS  
    - **Output**: Per-frame PNGs
